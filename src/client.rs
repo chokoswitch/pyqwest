@@ -13,8 +13,11 @@ pub struct Client {
 #[pymethods]
 impl Client {
     #[new]
-    #[pyo3(signature = (*, http_version = None))]
-    fn new<'py>(http_version: Option<Bound<'py, HTTPVersion>>) -> PyResult<Self> {
+    #[pyo3(signature = (*, tls_ca_cert = None, http_version = None))]
+    fn new<'py>(
+        tls_ca_cert: Option<&[u8]>,
+        http_version: Option<Bound<'py, HTTPVersion>>,
+    ) -> PyResult<Self> {
         let mut builder = reqwest::Client::builder();
         if let Some(http_version) = http_version {
             let http_version = http_version.get();
@@ -25,12 +28,20 @@ impl Client {
                 HTTPVersion::HTTP2 => {
                     builder = builder.http2_prior_knowledge();
                 }
-                HTTPVersion::HTTP3 => {}
+                HTTPVersion::HTTP3 => {
+                    builder = builder.http3_prior_knowledge();
+                }
             };
         }
-        let client = builder
-            .build()
-            .map_err(|e| PyRuntimeError::new_err(format!("Failed to create client: {}", e)))?;
+        if let Some(ca_cert) = tls_ca_cert {
+            let cert = reqwest::Certificate::from_pem(ca_cert).map_err(|e| {
+                PyRuntimeError::new_err(format!("Failed to parse CA certificate: {}", e))
+            })?;
+            builder = builder.tls_certs_only([cert]);
+        }
+        let client = builder.build().map_err(|e| {
+            PyRuntimeError::new_err(format!("Failed to create client: {:+}", errors::fmt(&e)))
+        })?;
         Ok(Self { client })
     }
 

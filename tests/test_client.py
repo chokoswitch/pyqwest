@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from queue import Queue
 from typing import TYPE_CHECKING
 
 import pytest
 import pytest_asyncio
+import trustme
 from pyvoy import PyvoyServer
 
 from pyqwest import Client, Headers, HTTPVersion, Request
@@ -14,22 +16,45 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Iterator
 
 
+@dataclass
+class Certs:
+    ca: bytes
+    server_cert: bytes
+    server_key: bytes
+
+
+@pytest.fixture(scope="module")
+def certs() -> Certs:
+    ca = trustme.CA()
+    server = ca.issue_cert("localhost")
+    return Certs(
+        ca=ca.cert_pem.bytes(),
+        server_cert=server.cert_chain_pems[0].bytes(),
+        server_key=server.private_key_pem.bytes(),
+    )
+
+
 @pytest_asyncio.fixture(scope="module")
-async def server() -> AsyncIterator[PyvoyServer]:
+async def server(certs: Certs) -> AsyncIterator[PyvoyServer]:
     async with PyvoyServer(
-        "tests.apps.asgi.kitchensink", lifespan=False, stdout=None, stderr=None
+        "tests.apps.asgi.kitchensink",
+        tls_key=certs.server_key,
+        tls_cert=certs.server_cert,
+        lifespan=False,
+        stdout=None,
+        stderr=None,
     ) as server:
         yield server
 
 
 @pytest.fixture
 def url(server: PyvoyServer) -> str:
-    return f"http://localhost:{server.listener_port}"
+    return f"https://localhost:{server.listener_port}"
 
 
 @pytest.fixture(scope="module")
-def client() -> Client:
-    return Client(http_version=HTTPVersion.HTTP2)
+def client(certs: Certs) -> Client:
+    return Client(tls_ca_cert=certs.ca, http_version=HTTPVersion.HTTP2)
 
 
 @pytest.mark.asyncio
