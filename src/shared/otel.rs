@@ -89,7 +89,8 @@ impl Operation {
         let context = self
             .constants
             .set_span_in_context
-            .call1(py, (&self.inner.span,))?;
+            .bind(py)
+            .call1((&self.inner.span,))?;
 
         // Avoid allocating a new map - we have an exclusive borrow on Request, so we can take the
         // headers out, pass to python, and take them back, which only copies the HeaderMap struct
@@ -98,7 +99,7 @@ impl Operation {
         let carrier = Headers(headers).into_pyobject(py)?;
         self.constants
             .inject_context
-            .call1(py, (&carrier, &context, &self.constants.headers_setter))?;
+            .call1(py, (&carrier, context, &self.constants.headers_setter))?;
         let hdrs = std::mem::take(&mut carrier.borrow_mut().0);
         *request.headers_mut() = hdrs;
 
