@@ -458,14 +458,16 @@ where
 #[pinned_drop]
 impl<F> PinnedDrop for InstrumentedConnectionFuture<F> {
     fn drop(self: Pin<&mut Self>) {
-        let project = self.project();
-        if !*project.guard_created {
-            project.metrics.dec();
+        let this = self.project();
+        if !*this.guard_created {
+            this.metrics.dec();
         }
     }
 }
 
+#[pin_project(PinnedDrop)]
 struct ConnectionGuard<T> {
+    #[pin]
     inner: T,
     metrics: ConnectionMetrics,
 }
@@ -492,33 +494,29 @@ impl<T> DerefMut for ConnectionGuard<T> {
 
 impl<T: AsyncRead + Unpin> AsyncRead for ConnectionGuard<T> {
     fn poll_read(
-        mut self: Pin<&mut Self>,
+        self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &mut tokio::io::ReadBuf<'_>,
     ) -> Poll<std::io::Result<()>> {
-        let this = Pin::new(&mut Pin::get_mut(self).inner);
-        this.poll_read(cx, buf)
+        self.project().inner.poll_read(cx, buf)
     }
 }
 
 impl<T: AsyncWrite + Unpin> AsyncWrite for ConnectionGuard<T> {
     fn poll_write(
-        mut self: Pin<&mut Self>,
+        self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<std::io::Result<usize>> {
-        let this = Pin::new(&mut Pin::get_mut(self).inner);
-        this.poll_write(cx, buf)
+        self.project().inner.poll_write(cx, buf)
     }
 
-    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-        let this = Pin::new(&mut Pin::get_mut(self).inner);
-        this.poll_flush(cx)
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        self.project().inner.poll_flush(cx)
     }
 
-    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-        let this = Pin::new(&mut Pin::get_mut(self).inner);
-        this.poll_shutdown(cx)
+    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        self.project().inner.poll_shutdown(cx)
     }
 }
 
@@ -528,8 +526,10 @@ impl<T: Connection> Connection for ConnectionGuard<T> {
     }
 }
 
-impl<T> Drop for ConnectionGuard<T> {
-    fn drop(&mut self) {
-        self.metrics.dec();
+#[pinned_drop]
+impl<T> PinnedDrop for ConnectionGuard<T> {
+    fn drop(self: Pin<&mut Self>) {
+        let this = self.project();
+        this.metrics.dec();
     }
 }
