@@ -1,10 +1,19 @@
 use std::{
+    future::Future,
+    ops::{Deref, DerefMut},
+    pin::Pin,
     str::FromStr as _,
-    sync::{Arc, Mutex},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc, Mutex,
+    },
+    task::{Context, Poll},
     time::Instant,
 };
 
 use http::{HeaderMap, HeaderName, HeaderValue};
+use hyper_util::client::legacy::connect::{Connected, Connection};
+use pin_project::{pin_project, pinned_drop};
 use pyo3::{
     exceptions::PyValueError,
     pyclass, pymethods,
@@ -12,6 +21,8 @@ use pyo3::{
     types::{PyAnyMethods as _, PyDict, PyDictMethods as _, PyString, PyTypeMethods as _},
     Bound, IntoPyObject as _, Py, PyAny, PyErr, PyResult, Python,
 };
+use tokio::io::{AsyncRead, AsyncWrite};
+use tower::{Layer, Service};
 
 use crate::shared::{constants::Constants, request::RequestHead};
 
@@ -282,5 +293,243 @@ impl HeadersSetter {
         );
 
         Ok(())
+    }
+}
+
+struct ConnectionMetricsInner {
+    connections: AtomicU64,
+}
+
+#[derive(Clone)]
+struct ConnectionMetrics {
+    inner: Arc<ConnectionMetricsInner>,
+}
+
+impl ConnectionMetrics {
+    fn new(
+        py: Python<'_>,
+        meter_provider: Option<&Bound<'_, PyAny>>,
+        constants: &Constants,
+    ) -> PyResult<Self> {
+        let inner = Arc::new(ConnectionMetricsInner {
+            connections: AtomicU64::new(0),
+        });
+        let meter_provider = if let Some(mp) = meter_provider {
+            mp.clone()
+        } else {
+            let constants = Constants::get(py)?;
+            constants.get_meter_provider.bind(py).call0()?
+        };
+        let meter = meter_provider.call_method1(&constants.get_meter, (&constants.pyqwest,))?;
+
+        meter.call_method1(
+            &constants.create_observable_up_down_counter,
+            (
+                &constants.http_client_open_connections,
+                (OpenConnectionsCallback {
+                    metrics: inner.clone(),
+                    constants: constants.clone(),
+                },),
+                &constants.otel_connection,
+                &constants.http_client_open_connections_description,
+            ),
+        )?;
+
+        Ok(Self { inner })
+    }
+
+    fn inc(&self) {
+        println!("Incrementing connections");
+        self.inner.connections.fetch_add(1, Ordering::Relaxed);
+    }
+    fn dec(&self) {
+        println!("Decrementing connections");
+        self.inner.connections.fetch_sub(1, Ordering::Relaxed);
+    }
+}
+
+#[derive(Clone)]
+pub(super) struct InstrumentedConnectionLayer {
+    metrics: ConnectionMetrics,
+}
+
+impl InstrumentedConnectionLayer {
+    pub(super) fn new(
+        py: Python<'_>,
+        meter_provider: Option<&Bound<'_, PyAny>>,
+        constants: &Constants,
+    ) -> PyResult<Self> {
+        Ok(Self {
+            metrics: ConnectionMetrics::new(py, meter_provider, constants)?,
+        })
+    }
+}
+
+#[derive(Clone)]
+pub(super) struct InstrumentedConnectionService<S> {
+    inner: S,
+    metrics: ConnectionMetrics,
+}
+
+impl<S> Layer<S> for InstrumentedConnectionLayer {
+    type Service = InstrumentedConnectionService<S>;
+
+    fn layer(&self, inner: S) -> Self::Service {
+        InstrumentedConnectionService {
+            inner,
+            metrics: self.metrics.clone(),
+        }
+    }
+}
+
+impl<S, Req> Service<Req> for InstrumentedConnectionService<S>
+where
+    S: Service<Req>,
+{
+    type Response = ConnectionGuard<S::Response>;
+    type Error = S::Error;
+    type Future = InstrumentedConnectionFuture<S::Future>;
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(&mut self, req: Req) -> Self::Future {
+        self.metrics.inc();
+        InstrumentedConnectionFuture {
+            inner: self.inner.call(req),
+            metrics: self.metrics.clone(),
+            guard_created: false,
+        }
+    }
+}
+
+#[pyclass(module = "_pyqwest.otel", name = "_OpenConnectionsCallback")]
+struct OpenConnectionsCallback {
+    metrics: Arc<ConnectionMetricsInner>,
+    constants: Constants,
+}
+
+#[pymethods]
+impl OpenConnectionsCallback {
+    fn __call__<'py>(
+        &self,
+        py: Python<'py>,
+        _options: &Bound<'py, PyAny>,
+    ) -> PyResult<(Bound<'py, PyAny>,)> {
+        println!(
+            "OpenConnectionsCallback called {}",
+            self.metrics.connections.load(Ordering::Relaxed)
+        );
+        let observataion_class = self.constants.observation_class.bind(py);
+        let observation =
+            observataion_class.call1((self.metrics.connections.load(Ordering::Relaxed),))?;
+        Ok((observation,))
+    }
+}
+
+#[pin_project(PinnedDrop)]
+pub(super) struct InstrumentedConnectionFuture<F> {
+    #[pin]
+    inner: F,
+    metrics: ConnectionMetrics,
+    guard_created: bool,
+}
+
+impl<F, Res, Err> Future for InstrumentedConnectionFuture<F>
+where
+    F: Future<Output = Result<Res, Err>>,
+{
+    type Output = Result<ConnectionGuard<Res>, Err>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.project();
+        match this.inner.poll(cx) {
+            Poll::Ready(Ok(conn)) => {
+                *this.guard_created = true;
+                Poll::Ready(Ok(ConnectionGuard::new(conn, this.metrics.clone())))
+            }
+            Poll::Ready(Err(err)) => Poll::Ready(Err(err)),
+            Poll::Pending => Poll::Pending,
+        }
+    }
+}
+
+#[pinned_drop]
+impl<F> PinnedDrop for InstrumentedConnectionFuture<F> {
+    fn drop(self: Pin<&mut Self>) {
+        let project = self.project();
+        if !*project.guard_created {
+            project.metrics.dec();
+        }
+    }
+}
+
+struct ConnectionGuard<T> {
+    inner: T,
+    metrics: ConnectionMetrics,
+}
+
+impl<T> ConnectionGuard<T> {
+    fn new(inner: T, metrics: ConnectionMetrics) -> Self {
+        Self { inner, metrics }
+    }
+}
+
+impl<T> Deref for ConnectionGuard<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl<T> DerefMut for ConnectionGuard<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
+
+impl<T: AsyncRead + Unpin> AsyncRead for ConnectionGuard<T> {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut tokio::io::ReadBuf<'_>,
+    ) -> Poll<std::io::Result<()>> {
+        let this = Pin::new(&mut Pin::get_mut(self).inner);
+        this.poll_read(cx, buf)
+    }
+}
+
+impl<T: AsyncWrite + Unpin> AsyncWrite for ConnectionGuard<T> {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<std::io::Result<usize>> {
+        let this = Pin::new(&mut Pin::get_mut(self).inner);
+        this.poll_write(cx, buf)
+    }
+
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        let this = Pin::new(&mut Pin::get_mut(self).inner);
+        this.poll_flush(cx)
+    }
+
+    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        let this = Pin::new(&mut Pin::get_mut(self).inner);
+        this.poll_shutdown(cx)
+    }
+}
+
+impl<T: Connection> Connection for ConnectionGuard<T> {
+    fn connected(&self) -> Connected {
+        self.inner.connected()
+    }
+}
+
+impl<T> Drop for ConnectionGuard<T> {
+    fn drop(&mut self) {
+        self.metrics.dec();
     }
 }

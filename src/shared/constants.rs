@@ -101,6 +101,8 @@ pub(crate) struct ConstantsInner {
     pub otel_3: Py<PyString>,
     /// The string "s".
     pub(super) otel_s: Py<PyString>,
+    /// The string "{connection}".
+    pub(super) otel_connection: Py<PyString>,
     /// The string "{request}".
     pub(super) otel_request: Py<PyString>,
     /// The string "error.type".
@@ -111,6 +113,10 @@ pub(crate) struct ConstantsInner {
     pub(super) http_client_active_requests: Py<PyString>,
     /// The string "Number of active HTTP requests.".
     pub(super) http_client_active_requests_description: Py<PyString>,
+    /// The string "`http.client.open_connections`".
+    pub(super) http_client_open_connections: Py<PyString>,
+    /// The string "Number of outbound HTTP connections that are currently active or idle on the client".
+    pub(super) http_client_open_connections_description: Py<PyString>,
     /// The string "http.client.request.duration".
     pub(super) http_client_request_duration: Py<PyString>,
     /// The string "Duration of HTTP client requests.".
@@ -138,6 +144,8 @@ pub(crate) struct ConstantsInner {
     pub(super) add: Py<PyString>,
     /// The string `create_histogram`.
     pub(super) create_histogram: Py<PyString>,
+    /// The string `create_observable_up_down_counter`.
+    pub(super) create_observable_up_down_counter: Py<PyString>,
     /// The string `create_up_down_counter`.
     pub(super) create_up_down_counter: Py<PyString>,
     /// The string `explicit_bucket_boundaries_advisory`.
@@ -159,6 +167,8 @@ pub(crate) struct ConstantsInner {
     pub(super) headers_setter: Py<HeadersSetter>,
     /// The function `propagate.inject`.
     pub(super) inject_context: Py<PyAny>,
+    /// The class `Observation`.
+    pub(super) observation_class: Py<PyAny>,
     /// The function `set_span_in_context`.
     pub(super) set_span_in_context: Py<PyAny>,
     /// The attribute SpanKind.CLIENT.
@@ -503,6 +513,7 @@ impl Constants {
                 otel_2: PyString::new(py, "2").unbind(),
                 otel_3: PyString::new(py, "3").unbind(),
                 otel_s: PyString::new(py, "s").unbind(),
+                otel_connection: PyString::new(py, "{connection}").unbind(),
                 otel_request: PyString::new(py, "{request}").unbind(),
                 error_type: PyString::new(py, "error.type").unbind(),
                 http: PyString::new(py, "http").unbind(),
@@ -511,6 +522,13 @@ impl Constants {
                 http_client_active_requests_description: PyString::new(
                     py,
                     "Number of active HTTP requests.",
+                )
+                .unbind(),
+                http_client_open_connections: PyString::new(py, "http.client.open_connections")
+                    .unbind(),
+                http_client_open_connections_description: PyString::new(
+                    py,
+                    "Number of outbound HTTP connections that are currently active or idle on the client",
                 )
                 .unbind(),
                 http_client_request_duration: PyString::new(py, "http.client.request.duration")
@@ -539,6 +557,11 @@ impl Constants {
 
                 add: PyString::new(py, "add").unbind(),
                 create_histogram: PyString::new(py, "create_histogram").unbind(),
+                create_observable_up_down_counter: PyString::new(
+                    py,
+                    "create_observable_up_down_counter",
+                )
+                .unbind(),
                 create_up_down_counter: PyString::new(py, "create_up_down_counter").unbind(),
                 explicit_bucket_boundaries_advisory: PyString::new(
                     py,
@@ -554,6 +577,7 @@ impl Constants {
                 get_tracer_provider: otel_trace.getattr("get_tracer_provider")?.unbind(),
                 headers_setter: Py::new(py, HeadersSetter {})?,
                 inject_context: otel_propagate.getattr("inject")?.unbind(),
+                observation_class: otel_metrics.getattr("Observation")?.unbind(),
                 set_span_in_context: otel_trace.getattr("set_span_in_context")?.unbind(),
                 span_kind_client: span_kind.getattr("CLIENT")?.unbind(),
 

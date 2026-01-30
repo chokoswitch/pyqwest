@@ -67,23 +67,28 @@ impl HttpTransport {
         meter_provider: Option<Bound<'_, PyAny>>,
         tracer_provider: Option<Bound<'_, PyAny>>,
     ) -> PyResult<Self> {
-        let (client, http3) = new_reqwest_client(ClientParams {
-            tls_ca_cert,
-            tls_key,
-            tls_cert,
-            http_version,
-            timeout,
-            connect_timeout,
-            read_timeout,
-            pool_idle_timeout,
-            pool_max_idle_per_host,
-            tcp_keepalive_interval,
-            enable_gzip,
-            enable_brotli,
-            enable_zstd,
-            use_system_dns,
-        })?;
         let constants = Constants::get(py)?;
+        let (client, http3) = new_reqwest_client(
+            py,
+            ClientParams {
+                tls_ca_cert,
+                tls_key,
+                tls_cert,
+                http_version,
+                timeout,
+                connect_timeout,
+                read_timeout,
+                pool_idle_timeout,
+                pool_max_idle_per_host,
+                tcp_keepalive_interval,
+                enable_gzip,
+                enable_brotli,
+                enable_zstd,
+                use_system_dns,
+            },
+            meter_provider.as_ref(),
+            &constants,
+        )?;
         Ok(Self {
             client: Arc::new(ArcSwapOption::from_pointee(client)),
             http3,
@@ -209,7 +214,7 @@ impl HttpTransport {
     pub(super) fn py_default(py: Python<'_>) -> PyResult<Self> {
         let constants = Constants::get(py)?;
         Ok(Self {
-            client: Arc::new(ArcSwapOption::from_pointee(get_default_reqwest_client(py))),
+            client: Arc::new(ArcSwapOption::from_pointee(get_default_reqwest_client(py)?)),
             http3: false,
             close: false,
             instrumentation: Instrumentation::new(py, None, None, &constants)?,

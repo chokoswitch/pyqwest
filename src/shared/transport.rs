@@ -3,11 +3,16 @@ use std::time::Duration;
 use pyo3::{
     exceptions::{PyRuntimeError, PyValueError},
     sync::PyOnceLock,
-    Bound, PyResult, Python,
+    Bound, PyAny, PyErr, PyResult, Python,
 };
 use pyo3_async_runtimes::tokio::get_runtime;
 
-use crate::{common::httpversion::HTTPVersion, shared::validation::validate_timeout};
+use crate::{
+    common::httpversion::HTTPVersion,
+    shared::{
+        constants::Constants, otel::InstrumentedConnectionLayer, validation::validate_timeout,
+    },
+};
 
 static DEFAULT_REQWEST_CLIENT: PyOnceLock<reqwest::Client> = PyOnceLock::new();
 
@@ -28,7 +33,12 @@ pub(crate) struct ClientParams<'a> {
     pub(crate) use_system_dns: bool,
 }
 
-pub(crate) fn new_reqwest_client(params: ClientParams) -> PyResult<(reqwest::Client, bool)> {
+pub(crate) fn new_reqwest_client(
+    py: Python<'_>,
+    params: ClientParams,
+    meter_provider: Option<&Bound<'_, PyAny>>,
+    constants: &Constants,
+) -> PyResult<(reqwest::Client, bool)> {
     let mut builder = reqwest::Client::builder();
     let mut http3 = false;
     if let Some(http_version) = params.http_version {
@@ -87,6 +97,9 @@ pub(crate) fn new_reqwest_client(params: ClientParams) -> PyResult<(reqwest::Cli
     builder = builder.zstd(params.enable_zstd);
     builder = builder.hickory_dns(!params.use_system_dns);
 
+    let connector_layer = InstrumentedConnectionLayer::new(py, meter_provider, constants)?;
+    builder = builder.connector_layer(connector_layer);
+
     let client = if http3 {
         // Workaround https://github.com/seanmonstar/reqwest/issues/2910
         let _guard = get_runtime().enter();
@@ -100,27 +113,32 @@ pub(crate) fn new_reqwest_client(params: ClientParams) -> PyResult<(reqwest::Cli
     Ok((client, http3))
 }
 
-pub(crate) fn get_default_reqwest_client(py: Python<'_>) -> reqwest::Client {
-    DEFAULT_REQWEST_CLIENT
-        .get_or_init(py, || {
-            let (client, _) = new_reqwest_client(ClientParams {
-                tls_ca_cert: None,
-                tls_key: None,
-                tls_cert: None,
-                http_version: None,
-                timeout: None,
-                connect_timeout: Some(30.0),
-                read_timeout: None,
-                pool_idle_timeout: Some(90.0),
-                pool_max_idle_per_host: None,
-                tcp_keepalive_interval: Some(30.0),
-                enable_gzip: true,
-                enable_brotli: true,
-                enable_zstd: true,
-                use_system_dns: false,
-            })
-            .unwrap();
-            client
-        })
-        .clone()
+pub(crate) fn get_default_reqwest_client(py: Python<'_>) -> PyResult<reqwest::Client> {
+    Ok(DEFAULT_REQWEST_CLIENT
+        .get_or_try_init(py, || {
+            let constants = Constants::get(py)?;
+            let (client, _) = new_reqwest_client(
+                py,
+                ClientParams {
+                    tls_ca_cert: None,
+                    tls_key: None,
+                    tls_cert: None,
+                    http_version: None,
+                    timeout: None,
+                    connect_timeout: Some(30.0),
+                    read_timeout: None,
+                    pool_idle_timeout: Some(90.0),
+                    pool_max_idle_per_host: None,
+                    tcp_keepalive_interval: Some(30.0),
+                    enable_gzip: true,
+                    enable_brotli: true,
+                    enable_zstd: true,
+                    use_system_dns: false,
+                },
+                None,
+                &constants,
+            )?;
+            Ok::<_, PyErr>(client)
+        })?
+        .clone())
 }

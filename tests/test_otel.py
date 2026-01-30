@@ -146,7 +146,7 @@ async def test_basic(
     }
 
     metrics = otel_test_base.get_sorted_metrics()
-    assert len(metrics) == 2
+    assert len(metrics) == 3
     active_requests_metric = cast("Metric", metrics[0])
     assert active_requests_metric.name == "http.client.active_requests"
     assert active_requests_metric.unit == "{request}"
@@ -165,7 +165,18 @@ async def test_basic(
     )
     assert active_requests_data.data_points[0].exemplars[0].span_id == span_ctx.span_id
 
-    request_duration_metric = cast("Metric", metrics[1])
+    open_connections_metric = cast("Metric", metrics[1])
+    assert open_connections_metric.name == "http.client.open_connections"
+    assert open_connections_metric.unit == "{connection}"
+    assert (
+        open_connections_metric.description
+        == "Number of outbound HTTP connections that are currently active or idle on the client"
+    )
+    open_connections_data = cast("Sum", open_connections_metric.data)
+    assert len(open_connections_data.data_points) == 1
+    assert open_connections_data.data_points[0].value == 1
+
+    request_duration_metric = cast("Metric", metrics[2])
     assert request_duration_metric.name == "http.client.request.duration"
     assert request_duration_metric.unit == "s"
     assert request_duration_metric.description == "Duration of HTTP client requests."
