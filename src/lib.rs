@@ -4,6 +4,7 @@ use pyo3::prelude::*;
 mod asyncio;
 mod common;
 mod headers;
+pub mod internal_for_pyvoy;
 mod pyerrors;
 /// Shared utilities between asyncio and sync modules.
 /// Code exposed to Python should be in common or pyerrors

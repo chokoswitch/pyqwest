@@ -9,10 +9,10 @@ use crate::headers::Headers;
 use crate::shared::constants::Constants;
 use crate::sync::timeout::get_timeout;
 
-pub(crate) struct RequestHead {
-    method: http::Method,
-    url: reqwest::Url,
-    headers: Py<Headers>,
+pub struct RequestHead {
+    pub method: http::Method,
+    pub url: reqwest::Url,
+    pub headers: Py<Headers>,
 }
 
 impl RequestHead {

@@ -26,8 +26,8 @@ use crate::{
 
 #[pyclass(module = "_pyqwest", frozen)]
 pub struct Request {
-    pub(super) head: RequestHead,
-    content: Option<Content>,
+    pub head: RequestHead,
+    pub content: Option<Content>,
 
     constants: Constants,
 }
@@ -131,7 +131,7 @@ impl Request {
     }
 }
 
-enum Content {
+pub enum Content {
     Bytes(PyBackedBytes),
     AsyncIter(Py<PyAny>),
 }

@@ -16,8 +16,8 @@ use crate::common::headername::HttpHeaderName;
 use crate::shared::constants::Constants;
 
 #[pyclass(module = "pyqwest", mapping, frozen)]
-pub(crate) struct Headers {
-    pub(crate) store: Mutex<HeaderMap<PyHeaderValue>>,
+pub struct Headers {
+    pub store: Mutex<HeaderMap<PyHeaderValue>>,
 }
 
 impl Headers {
@@ -593,7 +593,7 @@ enum PyHeaderValueKind {
 /// but need to return them as Python strings to the user when the GIL is available.
 /// We know we won't need the HTTP representation after this, so we convert once on read
 /// and replace the stored value.
-pub(crate) struct PyHeaderValue {
+pub struct PyHeaderValue {
     kind: PyHeaderValueKind,
 }
 
@@ -640,7 +640,7 @@ impl PyHeaderValue {
         }
     }
 
-    pub(crate) fn as_http(&self, py: Python<'_>) -> PyResult<HeaderValue> {
+    pub fn as_http(&self, py: Python<'_>) -> PyResult<HeaderValue> {
         match &self.kind {
             PyHeaderValueKind::Http(http) => Ok(http.clone()),
             PyHeaderValueKind::Py(py_str) => {
