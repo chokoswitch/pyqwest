@@ -434,3 +434,38 @@ workers. The value must be numeric.
 ```bash
 TOKIO_WORKER_THREADS=4 python app.py
 ```
+
+## Load Balancing
+
+pyqwest supports DNS load balancing, distributing requests across all the addresses
+returned for a host lookup rather than just one. This is commonly used with HTTP/2
+where otherwise only a single backend server would ever be used.
+
+=== "async"
+
+    ```python
+    async with HTTPTransport(enable_dns_load_balancing=True) as transport:
+        client = Client(transport)
+        # Requests will be distributed across different backend servers
+        for i in range(5)
+            await client.get("http://pyqwest.dev/")
+    ```
+
+=== "sync"
+
+    ```python
+    with SyncHTTPTransport(enable_dns_load_balancing=True) as transport:
+        client = SyncClient(transport)
+        # Requests will be distributed across different backend servers
+        for i in range(5)
+            client.get("http://pyqwest.dev/")
+    ```
+
+### HTTP/2 stream limit
+
+Even when `enable_dns_load_balancing` is not enabled, pyqwest will distribute requests
+across multiple connections to the same backend when a connection reaches the stream
+limit set by the server. If there is no connection with available streams, pyqwest will
+initiate a new connection and distribute streams to it, while also using the previous
+connection when it becomes available. To cap the number of connections to any given
+server, set `max_connections_per_address`.

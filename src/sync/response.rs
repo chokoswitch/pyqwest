@@ -76,13 +76,14 @@ impl SyncResponse {
 
     pub(super) async fn fill(&mut self, response: reqwest::Response) {
         let response: http::Response<_> = response.into();
-        let (head, body) = response.into_parts();
+        let (mut head, body) = response.into_parts();
+        let extensions = std::mem::take(&mut head.extensions);
         self.head.fill(head);
         if let Content::Http(content) = &self.content {
             let content_body = content.get().body.load();
             // SAFETY: We do not return the response to the user before calling fill so it
             // cannot be closed yet.
-            content_body.as_ref().unwrap().fill(body).await;
+            content_body.as_ref().unwrap().fill(body, extensions).await;
         } else {
             unreachable!("fill is only called on HTTP responses");
         }

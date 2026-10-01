@@ -69,6 +69,9 @@ impl ResponseHead {
 
 struct ResponseBodyInner {
     body: Mutex<Option<reqwest::Body>>,
+    // Response extensions live as long as the body. hyper-util keeps a lease
+    // on the HTTP/2 connection in there, released when the stream is done.
+    extensions: std::sync::Mutex<Option<http::Extensions>>,
     trailers: Py<Headers>,
     read_lock: Mutex<()>,
     cancel_tx: watch::Sender<bool>,
@@ -85,6 +88,7 @@ impl ResponseBody {
         ResponseBody {
             inner: Arc::new(ResponseBodyInner {
                 body: Mutex::new(None),
+                extensions: std::sync::Mutex::new(None),
                 trailers,
                 read_lock: Mutex::new(()),
                 cancel_tx,
@@ -92,9 +96,15 @@ impl ResponseBody {
         }
     }
 
-    pub(crate) async fn fill(&self, body: reqwest::Body) {
+    pub(crate) async fn fill(&self, body: reqwest::Body, extensions: http::Extensions) {
         let mut self_body = self.inner.body.lock().await;
         *self_body = Some(body);
+        *self.inner.extensions.lock().unwrap() = Some(extensions);
+    }
+
+    /// Drops what was attached to the response once its body is done.
+    fn finish(&self) {
+        *self.inner.extensions.lock().unwrap() = None;
     }
 
     pub(crate) async fn chunk(&self) -> PyResult<Option<Bytes>> {
@@ -117,11 +127,13 @@ impl ResponseBody {
                 res = body.frame() => res,
             };
             let Some(res) = res else {
+                self.finish();
                 return Ok(None);
             };
             let frame = match res {
                 Ok(frame) => frame,
                 Err(e) => {
+                    self.finish();
                     if let Some(e) = errors::find::<h2::Error>(&e) {
                         if matches!(e.reason(), Some(h2::Reason::NO_ERROR)) {
                             return Ok(None);
@@ -154,6 +166,7 @@ impl ResponseBody {
         let _read_guard = self.inner.read_lock.lock().await;
         let mut body = self.inner.body.lock().await;
         *body = None;
+        self.finish();
     }
 
     pub(crate) fn try_close(&self) -> bool {
@@ -163,6 +176,7 @@ impl ResponseBody {
         };
         if let Ok(mut body) = self.inner.body.try_lock() {
             *body = None;
+            self.finish();
             true
         } else {
             false
@@ -187,6 +201,7 @@ impl ResponseBody {
             }
             res = body.collect() => res,
         };
+        self.finish();
         let collected =
             collected.map_err(|e| pyerrors::from_reqwest(&e, "Error reading full content"))?;
 
