@@ -23,7 +23,6 @@ http-body = "1.1.0"
 http-body-util = "0.1.5"
 # Only used to classify reqwest's errors; must track the version reqwest depends on.
 hyper = { version = "1.11.1", features = ["client", "http1"] }
-# For the pool options reqwest has no builder method for; see `with_pool_options`.
 hyper-util = { version = "0.1.21", features = ["client-legacy"] }
 mime = "0.3.17"
 pyo3 = { version = "0.29.2", features = ["bytes"] }
@@ -57,8 +56,7 @@ struct_excessive_bools = "allow"
 too_many_arguments = "allow"
 unused_trait_names = "deny"
 
-# PROTOTYPE: stream-aware HTTP/2 pool fork, see the load-balancing exploration.
 [patch.crates-io]
-hyper-util = { git = "https://github.com/anuraaga/hyper-util", branch = "connection-pool" }
 h2 = { git = "https://github.com/anuraaga/h2", branch = "expose-initial-settings" }
 hyper = { git = "https://github.com/anuraaga/hyper", branch = "expose-settings" }
+hyper-util = { git = "https://github.com/anuraaga/hyper-util", branch = "connection-pool" }
