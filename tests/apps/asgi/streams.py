@@ -7,7 +7,13 @@ from typing import TYPE_CHECKING
 from urllib.parse import parse_qs
 
 if TYPE_CHECKING:
-    from asgiref.typing import ASGIReceiveCallable, ASGISendCallable, HTTPScope, Scope
+    from asgiref.typing import (
+        ASGIReceiveCallable,
+        ASGIReceiveEvent,
+        ASGISendCallable,
+        HTTPScope,
+        Scope,
+    )
 
 _POLL_INTERVAL = 0.005
 
@@ -40,7 +46,11 @@ async def _stream(receive: ASGIReceiveCallable, send: ASGISendCallable) -> None:
         }
     )
     await send({"type": "http.response.body", "body": b"", "more_body": True})
-    disconnect = asyncio.ensure_future(receive())
+
+    async def wait_disconnect() -> ASGIReceiveEvent:
+        return await receive()
+
+    disconnect = asyncio.ensure_future(wait_disconnect())
     try:
         while _released <= ticket:
             if disconnect.done() and disconnect.result()["type"] == "http.disconnect":
