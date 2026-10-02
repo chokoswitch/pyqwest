@@ -526,12 +526,15 @@ class HTTPTransport:
         read_timeout: float | None = None,
         pool_idle_timeout: float | None = 90.0,
         pool_max_idle_per_host: int | None = None,
+        max_connections_per_address: int | None = None,
         tcp_keepalive_interval: float | None = 30.0,
         enable_gzip: bool = True,
         enable_brotli: bool = True,
         enable_zstd: bool = True,
         use_system_dns: bool = False,
+        dns_overrides: Mapping[str, Sequence[str]] | None = None,
         enable_cookie_store: bool = False,
+        enable_dns_load_balancing: bool = False,
         follow_redirects: bool = True,
         max_redirects: int = 10,
         enable_otel: bool = True,
@@ -569,6 +572,9 @@ class HTTPTransport:
             pool_idle_timeout: Timeout for idle connections in the connection pool in seconds.
             pool_max_idle_per_host: Maximum number of idle connections to keep in the pool per host.
                                     Defaults to 2.
+            max_connections_per_address: Maximum number of open connections to each address the
+                                         host resolves to. Once every address is at its cap, a
+                                         request waits instead of opening another connection.
             tcp_keepalive_interval: Interval for TCP keepalive probes in seconds.
             enable_gzip: Whether to enable gzip decompression for responses.
             enable_brotli: Whether to enable brotli decompression for responses.
@@ -577,9 +583,14 @@ class HTTPTransport:
                             asynchronous DNS resolver implemented in Rust, but it can have different
                             behavior from system DNS in certain environments. Try enabling this option if
                             you have any DNS resolution issues.
+            dns_overrides: Addresses to use for hosts instead of resolving them, as a mapping of
+                           host name to a sequence of "ip" or "ip:port" strings. An address without
+                           a port uses the port of each request's URL. Generally only needed for testing.
             enable_cookie_store: Whether to enable automatic cookie storage and sending. When enabled,
                           the transport will automatically store cookies from responses and send
                           them with subsequent requests.
+            enable_dns_load_balancing: Whether to open connections to all the addresses resolved from
+                                       a host instead of just one.
             follow_redirects: Whether to automatically follow redirect responses. When disabled,
                               which is the default, redirect responses are returned as-is.
                               Leave this disabled when the transport is used through
@@ -1041,12 +1052,15 @@ class SyncHTTPTransport:
         read_timeout: float | None = None,
         pool_idle_timeout: float | None = 90.0,
         pool_max_idle_per_host: int | None = None,
+        max_connections_per_address: int | None = None,
         tcp_keepalive_interval: float | None = 30.0,
         enable_gzip: bool = True,
         enable_brotli: bool = True,
         enable_zstd: bool = True,
         use_system_dns: bool = False,
+        dns_overrides: Mapping[str, Sequence[str]] | None = None,
         enable_cookie_store: bool = False,
+        enable_dns_load_balancing: bool = False,
         follow_redirects: bool = True,
         max_redirects: int = 10,
         enable_otel: bool = True,
@@ -1084,6 +1098,9 @@ class SyncHTTPTransport:
             pool_idle_timeout: Timeout for idle connections in the connection pool in seconds.
             pool_max_idle_per_host: Maximum number of idle connections to keep in the pool per host.
                                     Defaults to 2.
+            max_connections_per_address: Maximum number of open connections to each address the
+                                         host resolves to. Once every address is at its cap, a
+                                         request waits instead of opening another connection.
             tcp_keepalive_interval: Interval for TCP keepalive probes in seconds.
             enable_gzip: Whether to enable gzip decompression for responses.
             enable_brotli: Whether to enable brotli decompression for responses.
@@ -1092,9 +1109,14 @@ class SyncHTTPTransport:
                             asynchronous DNS resolver implemented in Rust, but it can have different
                             behavior from system DNS in certain environments. Try enabling this option if
                             you have any DNS resolution issues.
+            dns_overrides: Addresses to use for hosts instead of resolving them, as a mapping of
+                           host name to a sequence of "ip" or "ip:port" strings. An address without
+                           a port uses the port of each request's URL. Generally only needed for testing.
             enable_cookie_store: Whether to enable automatic cookie storage and sending. When enabled,
                           the transport will automatically store cookies from responses and send
                           them with subsequent requests.
+            enable_dns_load_balancing: Whether to open connections to all the addresses resolved from
+                                       a host instead of just one.
             follow_redirects: Whether to automatically follow redirect responses. When disabled,
                               which is the default, redirect responses are returned as-is.
                               Leave this disabled when the transport is used through

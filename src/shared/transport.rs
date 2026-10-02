@@ -1,9 +1,13 @@
-use std::time::Duration;
+use std::{
+    net::{IpAddr, SocketAddr},
+    time::Duration,
+};
 
+use hyper_util::client::legacy::{with_pool_options, PoolOptions};
 use pyo3::{
     exceptions::{PyRuntimeError, PyTypeError, PyValueError},
     sync::PyOnceLock,
-    types::{PyAnyMethods as _, PyString, PyStringMethods as _},
+    types::{PyAnyMethods as _, PyDict, PyDictMethods as _, PyString, PyStringMethods as _},
     Bound, PyAny, PyResult, Python,
 };
 
@@ -32,18 +36,21 @@ pub(crate) struct ClientParams<'a> {
     pub(crate) read_timeout: Option<f64>,
     pub(crate) pool_idle_timeout: Option<f64>,
     pub(crate) pool_max_idle_per_host: Option<usize>,
+    pub(crate) max_connections_per_address: Option<usize>,
     pub(crate) tcp_keepalive_interval: Option<f64>,
     pub(crate) enable_gzip: bool,
     pub(crate) enable_brotli: bool,
     pub(crate) enable_zstd: bool,
     pub(crate) use_system_dns: bool,
+    pub(crate) dns_overrides: Option<Bound<'a, PyAny>>,
     pub(crate) enable_cookie_store: bool,
+    pub(crate) enable_dns_load_balancing: bool,
     pub(crate) follow_redirects: bool,
     pub(crate) max_redirects: usize,
 }
 
 pub(crate) fn new_reqwest_client(params: ClientParams) -> PyResult<(reqwest::Client, bool)> {
-    let mut builder = reqwest::Client::builder();
+    let (mut builder, pool_options) = configure_pool(reqwest::Client::builder(), &params)?;
     let mut http3 = false;
     if let Some(http_version) = params.http_version {
         let http_version = http_version.get().as_rust();
@@ -101,14 +108,6 @@ pub(crate) fn new_reqwest_client(params: ClientParams) -> PyResult<(reqwest::Cli
     if let Some(read_timeout) = validate_timeout(params.read_timeout)? {
         builder = builder.read_timeout(Duration::from_secs_f64(read_timeout));
     }
-    if let Some(idle_connection_timeout) = validate_timeout(params.pool_idle_timeout)? {
-        builder = builder.pool_idle_timeout(Duration::from_secs_f64(idle_connection_timeout));
-    } else {
-        builder = builder.pool_idle_timeout(None);
-    }
-    if let Some(max_idle_connections_per_host) = params.pool_max_idle_per_host {
-        builder = builder.pool_max_idle_per_host(max_idle_connections_per_host);
-    }
     if let Some(tcp_keepalive_interval) = validate_timeout(params.tcp_keepalive_interval)? {
         builder = builder.tcp_keepalive_interval(Duration::from_secs_f64(tcp_keepalive_interval));
     }
@@ -123,17 +122,75 @@ pub(crate) fn new_reqwest_client(params: ClientParams) -> PyResult<(reqwest::Cli
         reqwest::redirect::Policy::none()
     });
 
-    let client = if http3 {
-        // Workaround https://github.com/seanmonstar/reqwest/issues/2910
-        let _guard = get_runtime().enter();
-        builder.build()
-    } else {
-        builder.build()
-    }
+    // reqwest builds hyper-util's client inside `build()`, on this thread;
+    // the forked pool reads these options from there.
+    let client = with_pool_options(pool_options, || {
+        if http3 {
+            // Workaround https://github.com/seanmonstar/reqwest/issues/2910
+            let _guard = get_runtime().enter();
+            builder.build()
+        } else {
+            builder.build()
+        }
+    })
     .map_err(|e| {
         PyRuntimeError::new_err(format!("Failed to create client: {:+}", errors::fmt(&e)))
     })?;
     Ok((client, http3))
+}
+
+/// Applies the options that decide how connections are kept, counted, and
+/// spread over the addresses a host resolves to. The ones reqwest has no
+/// builder method for come back as `PoolOptions` for the forked pool.
+fn configure_pool(
+    mut builder: reqwest::ClientBuilder,
+    params: &ClientParams,
+) -> PyResult<(reqwest::ClientBuilder, PoolOptions)> {
+    if let Some(idle_connection_timeout) = validate_timeout(params.pool_idle_timeout)? {
+        builder = builder.pool_idle_timeout(Duration::from_secs_f64(idle_connection_timeout));
+    } else {
+        builder = builder.pool_idle_timeout(None);
+    }
+    if let Some(max_idle_connections_per_host) = params.pool_max_idle_per_host {
+        builder = builder.pool_max_idle_per_host(max_idle_connections_per_host);
+    }
+    if params.max_connections_per_address == Some(0) {
+        return Err(PyValueError::new_err(
+            "max_connections_per_address must be positive",
+        ));
+    }
+    if let Some(dns_overrides) = &params.dns_overrides {
+        for (host, addrs) in dns_overrides_from_py(dns_overrides)? {
+            builder = builder.resolve_to_addrs(&host, &addrs);
+        }
+    }
+    let pool_options = PoolOptions {
+        max_connections_per_address: params.max_connections_per_address,
+        dns_load_balancing: Some(params.enable_dns_load_balancing),
+    };
+    Ok((builder, pool_options))
+}
+
+fn dns_override_addr(addr: &str) -> PyResult<SocketAddr> {
+    if let Ok(addr) = addr.parse::<SocketAddr>() {
+        return Ok(addr);
+    }
+    // Without a port, the port of each request's URL is used.
+    addr.parse::<IpAddr>()
+        .map(|ip| SocketAddr::new(ip, 0))
+        .map_err(|_| PyValueError::new_err(format!("Invalid dns_overrides address: {addr}")))
+}
+
+fn dns_overrides_from_py(overrides: &Bound<'_, PyAny>) -> PyResult<Vec<(String, Vec<SocketAddr>)>> {
+    let mut result = Vec::new();
+    for (host, addrs) in overrides.cast::<PyDict>()?.iter() {
+        let mut parsed = Vec::new();
+        for addr in addrs.try_iter()? {
+            parsed.push(dns_override_addr(&addr?.extract::<String>()?)?);
+        }
+        result.push((host.extract::<String>()?, parsed));
+    }
+    Ok(result)
 }
 
 const PROXY_TYPE_ERROR: &str = "proxy must be a str, Proxy, or sequence of str | Proxy";
@@ -174,12 +231,15 @@ pub(crate) fn get_default_reqwest_client(py: Python<'_>) -> reqwest::Client {
                 read_timeout: None,
                 pool_idle_timeout: Some(90.0),
                 pool_max_idle_per_host: None,
+                max_connections_per_address: None,
                 tcp_keepalive_interval: Some(30.0),
                 enable_gzip: true,
                 enable_brotli: true,
                 enable_zstd: true,
                 use_system_dns: false,
+                dns_overrides: None,
                 enable_cookie_store: false,
+                enable_dns_load_balancing: false,
                 follow_redirects: true,
                 max_redirects: DEFAULT_MAX_REDIRECTS,
             })
