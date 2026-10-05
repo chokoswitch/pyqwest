@@ -16,8 +16,7 @@ import_exception!(pyqwest._errors, StreamError);
 pub fn from_reqwest(e: &reqwest::Error, msg: &str) -> PyErr {
     if let Some(e) = errors::find::<h2::Error>(e) {
         if e.is_remote() {
-            let code: u32 = e.reason().unwrap_or(h2::Reason::INTERNAL_ERROR).into();
-            return StreamError::new_err((msg.to_string(), code));
+            return stream_error(e, msg);
         }
     }
 
@@ -48,6 +47,30 @@ pub fn from_reqwest(e: &reqwest::Error, msg: &str) -> PyErr {
     } else {
         PyRuntimeError::new_err(msg)
     }
+}
+
+/// The error for an HTTP/2 stream the server ended with a `RST_STREAM` or
+/// GOAWAY frame.
+///
+/// A server retiring a connection sends GOAWAY with `NO_ERROR`. A request the
+/// client sent concurrently, on a stream the GOAWAY says the server never
+/// processed, fails with that GOAWAY as its error. reqwest resends such a
+/// request on another connection when it can replay the body, so the error
+/// only reaches us when the body was streamed or the resends ran out. reqwest
+/// then returns the GOAWAY's `NO_ERROR`, which says nothing about the stream,
+/// so it is translated to `REFUSED_STREAM`, the code a `RST_STREAM` carries for
+/// a request that was refused unprocessed and may be sent again.
+fn stream_error(e: &h2::Error, msg: &str) -> PyErr {
+    let reason = e.reason().unwrap_or(h2::Reason::INTERNAL_ERROR);
+    let (code, msg) = if e.is_go_away() && reason == h2::Reason::NO_ERROR {
+        (
+            h2::Reason::REFUSED_STREAM,
+            format!("{msg}: stream refused by GOAWAY: {e}"),
+        )
+    } else {
+        (reason, format!("{msg}: {e}"))
+    };
+    StreamError::new_err((msg, u32::from(code)))
 }
 
 /// Reports whether the error was caused by the peer violating HTTP framing, as
