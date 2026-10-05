@@ -830,7 +830,7 @@ dependencies = [
 [[package]]
 name = "hyper-util"
 version = "0.1.21"
-source = "git+https://github.com/anuraaga/hyper-util?branch=connection-pool#39dd561a36674ef09b279f1208d0f651d0091b9a"
+source = "git+https://github.com/anuraaga/hyper-util?branch=connection-pool#4816c32298a9614b497c8ae9672befeed827e6e0"
 dependencies = [
  "base64",
  "bytes",

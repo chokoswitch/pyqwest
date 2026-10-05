@@ -92,6 +92,9 @@ impl SyncHttpTransport {
         meter_provider: Option<Bound<'_, PyAny>>,
         tracer_provider: Option<Bound<'_, PyAny>>,
     ) -> PyResult<Self> {
+        let constants = Constants::get(py)?;
+        let instrumentation =
+            Instrumentation::new(py, enable_otel, meter_provider, tracer_provider, &constants)?;
         let (client, http3) = new_reqwest_client(ClientParams {
             tls_ca_cert,
             tls_include_system_certs,
@@ -115,19 +118,13 @@ impl SyncHttpTransport {
             enable_dns_load_balancing,
             follow_redirects,
             max_redirects,
+            pool_metrics: instrumentation.pool_metrics(),
         })?;
-        let constants = Constants::get(py)?;
         Ok(Self {
             client: Arc::new(ArcSwapOption::from_pointee(client)),
             http3,
             close: true,
-            instrumentation: Instrumentation::new(
-                py,
-                enable_otel,
-                meter_provider,
-                tracer_provider,
-                &constants,
-            )?,
+            instrumentation,
             constants,
         })
     }
@@ -227,11 +224,15 @@ impl SyncHttpTransport {
 
     pub(super) fn py_default(py: Python<'_>) -> PyResult<Self> {
         let constants = Constants::get(py)?;
+        let instrumentation = Instrumentation::new(py, true, None, None, &constants)?;
         Ok(Self {
-            client: Arc::new(ArcSwapOption::from_pointee(get_default_reqwest_client(py))),
+            client: Arc::new(ArcSwapOption::from_pointee(get_default_reqwest_client(
+                py,
+                instrumentation.pool_metrics(),
+            ))),
             http3: false,
             close: false,
-            instrumentation: Instrumentation::new(py, true, None, None, &constants)?,
+            instrumentation,
             constants,
         })
     }
