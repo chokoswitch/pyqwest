@@ -23,9 +23,10 @@ while presenting a familiar Pythonic API.
 ## Features
 
 - All features of HTTP, including bidirectional streaming, trailers, and HTTP/3
-- Async and sync clients
+- Async and sync clients, supporting all features
 - The stability and performance of the Rust HTTP client stack
 - A fully-typed, Pythonic API - no runtime-checked union types
+- Production-ready features like flexible middleware and built-in observability
 - An [adapter](api.md#httpx-adapter) to allow dropping into existing codebases using [HTTPX](https://www.python-httpx.org/)
 
 ## Quickstart
@@ -78,4 +79,4 @@ Check out the [API reference](https://curioswitch.github.io/pyqwest/api/) page f
 pyqwest was created out of a desire to bring bidirectional streaming and HTTP/2 trailers to Python HTTP
 clients to allow using the gRPC protocol with standard applications - it powers the gRPC client functionality
 in [connect-python](https://github.com/connectrpc/connect-python). While developing it, we have found it to
-be a very fast, stable client for any workload.
+be a very fast, stable, production-ready client for any workload.
