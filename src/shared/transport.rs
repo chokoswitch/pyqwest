@@ -3,7 +3,7 @@ use std::{
     time::Duration,
 };
 
-use hyper_util::client::legacy::{with_pool_options, PoolOptions};
+use hyper_util::client::legacy::{with_pool_options, PoolMetrics, PoolOptions};
 use pyo3::{
     exceptions::{PyRuntimeError, PyTypeError, PyValueError},
     sync::PyOnceLock,
@@ -47,6 +47,8 @@ pub(crate) struct ClientParams<'a> {
     pub(crate) enable_dns_load_balancing: bool,
     pub(crate) follow_redirects: bool,
     pub(crate) max_redirects: usize,
+    /// Reports the client's connection pool metrics.
+    pub(crate) pool_metrics: Option<PoolMetrics>,
 }
 
 pub(crate) fn new_reqwest_client(params: ClientParams) -> PyResult<(reqwest::Client, bool)> {
@@ -167,6 +169,7 @@ fn configure_pool(
     let pool_options = PoolOptions {
         max_connections_per_address: params.max_connections_per_address,
         dns_load_balancing: Some(params.enable_dns_load_balancing),
+        metrics: params.pool_metrics.clone(),
     };
     Ok((builder, pool_options))
 }
@@ -216,7 +219,12 @@ fn proxies_from_py(proxy: &Bound<'_, PyAny>) -> PyResult<Vec<reqwest::Proxy>> {
     Ok(proxies)
 }
 
-pub(crate) fn get_default_reqwest_client(py: Python<'_>) -> reqwest::Client {
+/// The reqwest client shared by the default transports. It is built once, by
+/// whichever default transport is created first.
+pub(crate) fn get_default_reqwest_client(
+    py: Python<'_>,
+    pool_metrics: Option<PoolMetrics>,
+) -> reqwest::Client {
     DEFAULT_REQWEST_CLIENT
         .get_or_init(py, || {
             let (client, _) = new_reqwest_client(ClientParams {
@@ -242,6 +250,7 @@ pub(crate) fn get_default_reqwest_client(py: Python<'_>) -> reqwest::Client {
                 enable_dns_load_balancing: false,
                 follow_redirects: true,
                 max_redirects: DEFAULT_MAX_REDIRECTS,
+                pool_metrics,
             })
             .unwrap();
             client

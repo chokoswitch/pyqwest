@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import json
 import re
 import socket
@@ -14,7 +16,7 @@ from pyvoy import PyvoyServer
 from pyqwest import HTTPVersion, SyncHTTPTransport, SyncRequest
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterator
 
 WAIT_TIMEOUT = 5.0
 
@@ -85,6 +87,23 @@ class PoolTestServer(PyvoyServer):
             return
         with urllib.request.urlopen(f"{self.url}{path}") as response:  # noqa: S310
             response.read()
+
+
+@contextlib.contextmanager
+def run_pool_server(*, max_concurrent_streams: int) -> Iterator[PoolTestServer]:
+    """Runs a `PoolTestServer` for the duration of the block."""
+    server = PoolTestServer(max_concurrent_streams=max_concurrent_streams)
+    # pyvoy drives its Envoy subprocess with asyncio. A private loop keeps the
+    # server independent of the backend the async tests run on.
+    loop = asyncio.new_event_loop()
+    try:
+        loop.run_until_complete(server.start())
+        try:
+            yield server
+        finally:
+            loop.run_until_complete(server.stop())
+    finally:
+        loop.close()
 
 
 def free_port() -> int:

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import gc
 import threading
 from typing import TYPE_CHECKING
@@ -19,7 +18,7 @@ from pyqwest import (
     SyncResponse,
 )
 
-from ._pool_server import PoolTestServer, free_port, settle, wait_for
+from ._pool_server import PoolTestServer, free_port, run_pool_server, settle, wait_for
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
@@ -31,29 +30,16 @@ HOST = "pool.test"
 """The host name the DNS tests point at the servers."""
 
 
-def _run_server() -> Iterator[PoolTestServer]:
-    server = PoolTestServer(max_concurrent_streams=STREAM_LIMIT)
-    # pyvoy drives its Envoy subprocess with asyncio. A private loop keeps the
-    # server independent of the backend the async tests run on.
-    loop = asyncio.new_event_loop()
-    try:
-        loop.run_until_complete(server.start())
-        try:
-            yield server
-        finally:
-            loop.run_until_complete(server.stop())
-    finally:
-        loop.close()
-
-
 @pytest.fixture(scope="module")
 def server() -> Iterator[PoolTestServer]:
-    yield from _run_server()
+    with run_pool_server(max_concurrent_streams=STREAM_LIMIT) as server:
+        yield server
 
 
 @pytest.fixture(scope="module")
 def other_server() -> Iterator[PoolTestServer]:
-    yield from _run_server()
+    with run_pool_server(max_concurrent_streams=STREAM_LIMIT) as server:
+        yield server
 
 
 @pytest.fixture(autouse=True)

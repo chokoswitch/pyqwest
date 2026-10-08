@@ -5,6 +5,7 @@ use std::{
 };
 
 use http::{HeaderMap, HeaderName, HeaderValue};
+use hyper_util::client::legacy::PoolMetrics;
 use pyo3::{
     exceptions::PyValueError,
     pyclass, pymethods,
@@ -16,13 +17,17 @@ use pyo3::{
 };
 use tokio::runtime::RuntimeMetrics;
 
-use crate::shared::{constants::Constants, request::RequestHead, runtime::get_runtime};
+use crate::shared::{
+    connection_metrics::start_connection_metrics, constants::Constants, request::RequestHead,
+    runtime::get_runtime,
+};
 
 struct InstrumentationInner {
     tracer: Py<PyAny>,
 
     metric_http_client_active_requests: Py<PyAny>,
     metric_http_client_request_duration: Py<PyAny>,
+    pool_metrics: PoolMetrics,
 
     constants: Constants,
 }
@@ -59,6 +64,7 @@ impl Instrumentation {
         let tracer = tracer_provider.call_method1(&constants.get_tracer, (&constants.pyqwest,))?;
 
         start_runtime_metrics(py, &meter, constants)?;
+        let pool_metrics = start_connection_metrics(py, &meter, constants)?;
 
         let kwargs = PyDict::new(py);
         kwargs.set_item(
@@ -89,10 +95,18 @@ impl Instrumentation {
                 tracer: tracer.unbind(),
                 metric_http_client_active_requests: metric_http_client_active_requests.unbind(),
                 metric_http_client_request_duration: metric_http_client_request_duration.unbind(),
+                pool_metrics,
                 constants: constants.clone(),
             })),
             constants: constants.clone(),
         })
+    }
+
+    /// Returns the handle the connection pool of the instrumented reqwest
+    /// client should record its metrics into, or `None` when instrumentation
+    /// is disabled.
+    pub(crate) fn pool_metrics(&self) -> Option<PoolMetrics> {
+        self.inner.as_ref().map(|inner| inner.pool_metrics.clone())
     }
 
     /// Prepares log records for this request if the "pyqwest" logger (granular
@@ -363,7 +377,7 @@ impl Operation {
     }
 }
 
-fn network_protocol_version(
+pub(super) fn network_protocol_version(
     py: Python<'_>,
     ver: http::Version,
     constants: &Constants,

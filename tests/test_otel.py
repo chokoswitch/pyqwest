@@ -34,6 +34,8 @@ from pyqwest import (
     SyncResponse,
 )
 
+from ._otel import get_http_metric, get_http_metrics
+
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Iterator
 
@@ -106,11 +108,6 @@ def sync_client(sync_transport: SyncHTTPTransport) -> SyncClient:
     return SyncClient(sync_transport)
 
 
-def get_http_metrics(otel_test_base: TestBase) -> list[Metric]:
-    metrics = cast("list[Metric]", otel_test_base.get_sorted_metrics())
-    return [metric for metric in metrics if metric.name.startswith("http.client.")]
-
-
 def get_runtime_metrics(otel_test_base: TestBase) -> list[Metric]:
     metrics = cast("list[Metric]", otel_test_base.get_sorted_metrics())
     return [
@@ -161,8 +158,7 @@ async def test_basic(
     }
 
     metrics = get_http_metrics(otel_test_base)
-    assert len(metrics) == 2
-    active_requests_metric = metrics[0]
+    active_requests_metric = get_http_metric(metrics, "http.client.active_requests")
     assert active_requests_metric.name == "http.client.active_requests"
     assert active_requests_metric.unit == "{request}"
     assert active_requests_metric.description == "Number of active HTTP requests."
@@ -180,7 +176,7 @@ async def test_basic(
     )
     assert active_requests_data.data_points[0].exemplars[0].span_id == span_ctx.span_id
 
-    request_duration_metric = metrics[1]
+    request_duration_metric = get_http_metric(metrics, "http.client.request.duration")
     assert request_duration_metric.name == "http.client.request.duration"
     assert request_duration_metric.unit == "s"
     assert request_duration_metric.description == "Duration of HTTP client requests."
@@ -254,8 +250,7 @@ async def test_stream(
         }
 
         metrics = get_http_metrics(otel_test_base)
-        assert len(metrics) == 2
-        active_requests_metric = metrics[0]
+        active_requests_metric = get_http_metric(metrics, "http.client.active_requests")
         assert active_requests_metric.name == "http.client.active_requests"
         assert active_requests_metric.unit == "{request}"
         assert active_requests_metric.description == "Number of active HTTP requests."
@@ -268,7 +263,9 @@ async def test_stream(
             "server.port": server_port,
         }
 
-        request_duration_metric = metrics[1]
+        request_duration_metric = get_http_metric(
+            metrics, "http.client.request.duration"
+        )
         assert request_duration_metric.name == "http.client.request.duration"
         assert request_duration_metric.unit == "s"
         assert (
@@ -321,8 +318,7 @@ async def test_connection_error(
     }
 
     metrics = get_http_metrics(otel_test_base)
-    assert len(metrics) == 2
-    active_requests_metric = metrics[0]
+    active_requests_metric = get_http_metric(metrics, "http.client.active_requests")
     assert active_requests_metric.name == "http.client.active_requests"
     assert active_requests_metric.unit == "{request}"
     assert active_requests_metric.description == "Number of active HTTP requests."
@@ -335,7 +331,7 @@ async def test_connection_error(
         "server.port": port,
     }
 
-    request_duration_metric = metrics[1]
+    request_duration_metric = get_http_metric(metrics, "http.client.request.duration")
     assert request_duration_metric.name == "http.client.request.duration"
     assert request_duration_metric.unit == "s"
     assert request_duration_metric.description == "Duration of HTTP client requests."
@@ -396,8 +392,7 @@ async def test_response_error(
     }
 
     metrics = get_http_metrics(otel_test_base)
-    assert len(metrics) == 2
-    active_requests_metric = metrics[0]
+    active_requests_metric = get_http_metric(metrics, "http.client.active_requests")
     assert active_requests_metric.name == "http.client.active_requests"
     assert active_requests_metric.unit == "{request}"
     assert active_requests_metric.description == "Number of active HTTP requests."
@@ -410,7 +405,7 @@ async def test_response_error(
         "server.port": server_port,
     }
 
-    request_duration_metric = metrics[1]
+    request_duration_metric = get_http_metric(metrics, "http.client.request.duration")
     assert request_duration_metric.name == "http.client.request.duration"
     assert request_duration_metric.unit == "s"
     assert request_duration_metric.description == "Duration of HTTP client requests."
