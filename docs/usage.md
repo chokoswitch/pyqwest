@@ -77,16 +77,24 @@ content-type header is set to match it.
     ```python
     from pyqwest import Multipart, Part
 
+
     async def file_chunks():
         yield b"file "
         yield b"content"
 
+
     response = await client.post(
         "https://httpbingo.org/post",
-        content=Multipart({
-            "field": "value",
-            "file": Part(file_chunks(), filename="hello.txt", headers={"content-type": "text/plain"}),
-        }),
+        content=Multipart(
+            {
+                "field": "value",
+                "file": Part(
+                    file_chunks(),
+                    filename="hello.txt",
+                    headers={"content-type": "text/plain"},
+                ),
+            }
+        ),
     )
     print(response.text())
     ```
@@ -96,16 +104,24 @@ content-type header is set to match it.
     ```python
     from pyqwest import SyncMultipart, SyncPart
 
+
     def file_chunks():
         yield b"file "
         yield b"content"
 
+
     response = client.post(
         "https://httpbingo.org/post",
-        content=SyncMultipart({
-            "field": "value",
-            "file": SyncPart(file_chunks(), filename="hello.txt", headers={"content-type": "text/plain"}),
-        }),
+        content=SyncMultipart(
+            {
+                "field": "value",
+                "file": SyncPart(
+                    file_chunks(),
+                    filename="hello.txt",
+                    headers={"content-type": "text/plain"},
+                ),
+            }
+        ),
     )
     print(response.text())
     ```
@@ -214,9 +230,7 @@ already replayable, so it follows the normal response retry policy in either mod
 
 
     client = Client(transport=MyRetryTransport(HTTPTransport()))
-    await client.get(
-        "http://localhost/safe-method"
-    )  # will retry on transient errors
+    await client.get("http://localhost/safe-method")  # will retry on transient errors
     await client.get("http://localhost/unsafe-method")  # will not retry
     ```
 
@@ -339,6 +353,7 @@ still raises `TimeoutError`. Connect and read timeouts cannot be configured per 
 
     ```python
     import asyncio
+
     response = await asyncio.wait_for(client.get("https://pyqwest.dev"), timeout=2.0)
     ```
 

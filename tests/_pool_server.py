@@ -16,7 +16,7 @@ from pyvoy import PyvoyServer
 from pyqwest import HTTPVersion, SyncHTTPTransport, SyncRequest
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Callable, Generator
 
 WAIT_TIMEOUT = 5.0
 
@@ -90,7 +90,7 @@ class PoolTestServer(PyvoyServer):
 
 
 @contextlib.contextmanager
-def run_pool_server(*, max_concurrent_streams: int) -> Iterator[PoolTestServer]:
+def run_pool_server(*, max_concurrent_streams: int) -> Generator[PoolTestServer]:
     """Runs a `PoolTestServer` for the duration of the block."""
     server = PoolTestServer(max_concurrent_streams=max_concurrent_streams)
     # pyvoy drives its Envoy subprocess with asyncio. A private loop keeps the

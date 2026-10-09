@@ -23,13 +23,8 @@ from pyqwest.testing import WSGITransport
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
-
-    if sys.version_info >= (3, 11):
-        from wsgiref.types import InputStream as WSGIInputStream
-        from wsgiref.types import StartResponse, WSGIEnvironment
-    else:
-        from _typeshed.wsgi import InputStream as WSGIInputStream
-        from _typeshed.wsgi import StartResponse, WSGIEnvironment
+    from wsgiref.types import InputStream as WSGIInputStream
+    from wsgiref.types import StartResponse, WSGIEnvironment
 
 
 class App:

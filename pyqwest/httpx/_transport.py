@@ -88,7 +88,7 @@ class AsyncPyqwestTransport(httpx.AsyncBaseTransport):
             raise httpx.TooManyRedirects(str(e), request=request) from e
         except ConnectionError as e:
             raise map_connection_error(e, request) from e
-        except (TimeoutError, asyncio.TimeoutError) as e:
+        except TimeoutError as e:
             raise map_timeout_error(e, request) from e
         except (ReadError, WriteError) as e:
             raise map_network_error(e, request) from e
@@ -167,7 +167,7 @@ class AsyncIteratorByteStream(httpx.AsyncByteStream):
             raise map_remote_protocol_error(e) from e
         except ConnectionError as e:
             raise map_connection_error(e) from e
-        except (TimeoutError, asyncio.TimeoutError) as e:
+        except TimeoutError as e:
             raise map_timeout_error(e) from e
         except (ReadError, WriteError) as e:
             raise map_network_error(e) from e

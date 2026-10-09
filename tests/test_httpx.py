@@ -42,15 +42,10 @@ from ._util import (
 )
 
 if TYPE_CHECKING:
-    import sys
     from collections.abc import AsyncIterator, Iterable, Iterator
+    from wsgiref.types import StartResponse, WSGIEnvironment
 
     from asgiref.typing import ASGIReceiveCallable, ASGISendCallable, Scope
-
-    if sys.version_info >= (3, 11):
-        from wsgiref.types import StartResponse, WSGIEnvironment
-    else:
-        from _typeshed.wsgi import StartResponse, WSGIEnvironment
 
 
 # AsyncPyqwestTransport uses asyncio for timeouts and thread handoff.

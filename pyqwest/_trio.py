@@ -16,14 +16,9 @@ from __future__ import annotations
 import contextlib
 import contextvars
 import logging
-import sys
 from typing import TYPE_CHECKING, Protocol
 
 import trio
-
-if sys.version_info < (3, 11):
-    # A dependency of trio 0.22 and later on these versions.
-    from exceptiongroup import BaseExceptionGroup
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Coroutine

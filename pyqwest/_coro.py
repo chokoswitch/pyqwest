@@ -7,7 +7,7 @@ from ._pyqwest import Client as NativeClient
 from ._pyqwest import FullResponse, Headers, Response, Transport
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Iterable, Mapping
+    from collections.abc import AsyncGenerator, Iterable, Mapping
 
     from ._pyqwest import _QueryParams, _RequestContent
 
@@ -249,7 +249,7 @@ class Client:
         content: _RequestContent | None = None,
         *,
         params: _QueryParams | None = None,
-    ) -> AsyncIterator[Response]:
+    ) -> AsyncGenerator[Response]:
         """Executes an HTTP request, allowing the response content to be streamed.
 
         Args:

@@ -59,9 +59,9 @@ def is_double_callable(application: ASGIApplication) -> bool:
         return True
     if inspect.isclass(application):
         return True
-    if callable(application) and iscoroutinefunction(application.__call__):
+    if callable(application) and iscoroutinefunction(application.__call__):  # ty: ignore[deprecated]
         return False
-    return not iscoroutinefunction(application)
+    return not iscoroutinefunction(application)  # ty: ignore[deprecated]
 
 
 def double_to_single_callable(application: ASGI2Application) -> ASGI3Application:

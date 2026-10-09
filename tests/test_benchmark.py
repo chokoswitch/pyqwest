@@ -3,18 +3,12 @@ from __future__ import annotations
 import asyncio
 import ssl
 import sys
-
-import pytest
-
-if sys.version_info < (3, 11):
-    pytest.skip("asyncio.Runner requires Python 3.11+", allow_module_level=True)
-
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING
 
 import aiohttp
 import httpx
-import niquests
+import pytest
 from anyio import to_thread
 
 from pyqwest import Client, HTTPTransport, HTTPVersion, SyncClient, SyncHTTPTransport
@@ -47,9 +41,7 @@ CONCURRENCY = 10
 TASK_SIZE = 30
 
 
-@pytest.fixture(
-    params=["pyqwest", "aiohttp", "httpx", "httpx_pyqwest", "niquests"], scope="module"
-)
+@pytest.fixture(params=["pyqwest", "aiohttp", "httpx", "httpx_pyqwest"], scope="module")
 def library(request: pytest.FixtureRequest) -> str:
     return request.param
 
@@ -75,9 +67,7 @@ async def benchmark_client_async(
     http_version: HTTPVersion | None,
     library: str,
     async_runner: asyncio.Runner,
-) -> AsyncIterator[
-    Client | httpx.AsyncClient | aiohttp.ClientSession | niquests.AsyncSession
-]:
+) -> AsyncIterator[Client | httpx.AsyncClient | aiohttp.ClientSession]:
     ssl_ctx = ssl.create_default_context()
     ssl_ctx.load_verify_locations(cadata=certs.ca.decode())
     match library:
@@ -111,17 +101,6 @@ async def benchmark_client_async(
                 transport=AsyncPyqwestTransport(async_transport)
             ) as client:
                 yield client
-        case "niquests":
-            pytest.skip("seems to leak file descriptors")
-            if http_version == HTTPVersion.HTTP3:
-                pytest.skip("Connection aborted error")
-            async with niquests.AsyncSession(
-                disable_http1=(http_version not in (HTTPVersion.HTTP1, None)),
-                disable_http2=(http_version not in (HTTPVersion.HTTP2, None)),
-                disable_http3=(http_version not in (HTTPVersion.HTTP3, None)),
-            ) as client:
-                client.verify = certs.ca
-                yield client
         case "pyqwest":
             yield async_client
 
@@ -133,7 +112,7 @@ def benchmark_client_sync(
     certs: Certs,
     http_version: HTTPVersion | None,
     library: str,
-) -> Iterator[SyncClient | httpx.Client | niquests.Session]:
+) -> Iterator[SyncClient | httpx.Client]:
     ssl_ctx = ssl.create_default_context()
     ssl_ctx.load_verify_locations(cadata=certs.ca.decode())
     match library:
@@ -153,17 +132,7 @@ def benchmark_client_sync(
         case "httpx_pyqwest":
             with httpx.Client(transport=PyqwestTransport(sync_transport)) as client:
                 yield client
-        case "niquests":
-            pytest.skip("seems to leak file descriptors")
-            if http_version == HTTPVersion.HTTP3:
-                pytest.skip("Connection aborted error")
-            with niquests.Session(
-                disable_http1=(http_version not in (HTTPVersion.HTTP1, None)),
-                disable_http2=(http_version not in (HTTPVersion.HTTP2, None)),
-                disable_http3=(http_version not in (HTTPVersion.HTTP3, None)),
-            ) as client:
-                client.verify = certs.ca
-                yield client
+
         case "pyqwest":
             yield sync_client
 
@@ -174,10 +143,7 @@ def benchmark_client_sync(
 @pytest.mark.parametrize("content_size", [0, 1024, 1024 * 1024])
 def test_benchmark_async(
     benchmark: pytest_benchmark.fixture.BenchmarkFixture,
-    benchmark_client_async: Client
-    | aiohttp.ClientSession
-    | httpx.AsyncClient
-    | niquests.AsyncSession,
+    benchmark_client_async: Client | aiohttp.ClientSession | httpx.AsyncClient,
     url: str,
     content_size: int,
     async_runner: asyncio.Runner,
@@ -241,18 +207,6 @@ def test_benchmark_async(
                             pass
 
             execute_request = execute_request_httpx
-        case niquests.AsyncSession():
-
-            async def execute_request_niquests() -> None:
-                for _ in range(TASK_SIZE):
-                    with await benchmark_client_async.request(
-                        method, target_url, data=body, stream=True
-                    ) as res:
-                        assert res.status_code == 200
-                        async for _chunk in await res.iter_content():
-                            pass
-
-            execute_request = execute_request_niquests
 
     async def execute_requests() -> None:
         tasks = [asyncio.create_task(execute_request()) for _ in range(CONCURRENCY)]
@@ -266,7 +220,7 @@ def test_benchmark_async(
 @pytest.mark.parametrize("content_size", [0, 1024, 1024 * 1024])
 def test_benchmark_sync(
     benchmark: pytest_benchmark.fixture.BenchmarkFixture,
-    benchmark_client_sync: SyncClient | httpx.Client | niquests.Session,
+    benchmark_client_sync: SyncClient | httpx.Client,
     url: str,
     content_size: int,
     sync_runner: ThreadPoolExecutor,
@@ -318,18 +272,6 @@ def test_benchmark_sync(
                             pass
 
             execute_request = execute_request_httpx
-        case niquests.Session():
-
-            def execute_request_niquests() -> None:
-                for _ in range(TASK_SIZE):
-                    with benchmark_client_sync.request(
-                        method, target_url, data=body, stream=True
-                    ) as res:
-                        assert res.status_code == 200
-                        for _chunk in res.iter_content():
-                            pass
-
-            execute_request = execute_request_niquests
 
     @benchmark
     def execute_requests() -> None:

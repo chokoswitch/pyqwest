@@ -8,7 +8,7 @@ from collections.abc import Callable, Iterator
 from concurrent.futures import Future, ThreadPoolExecutor
 from io import StringIO
 from queue import Empty, Queue
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Self
 from urllib.parse import unquote, urlparse
 
 from pyqwest import (
@@ -25,12 +25,7 @@ from pyqwest._pyqwest import get_sync_timeout
 from ._decompress import Decompressor, get_decompressor
 
 if TYPE_CHECKING:
-    import sys
-
-    if sys.version_info >= (3, 11):
-        from wsgiref.types import WSGIApplication, WSGIEnvironment
-    else:
-        from _typeshed.wsgi import WSGIApplication, WSGIEnvironment
+    from wsgiref.types import WSGIApplication, WSGIEnvironment
 
 _UNSET_STATUS = "unset"
 
@@ -159,7 +154,7 @@ class WSGITransport(SyncTransport):
         if request._json and "content-type" not in request.headers:  # noqa: SLF001
             environ["CONTENT_TYPE"] = "application/json"
 
-        response_queue: Queue[bytes | None | Exception] = Queue()
+        response_queue: Queue[bytes | Exception | None] = Queue()
 
         status_str: str = _UNSET_STATUS
         headers: list[tuple[str, str]] = []
@@ -368,7 +363,7 @@ class RequestInput:
 class ResponseContent(Iterator[bytes]):
     def __init__(
         self,
-        response_queue: Queue[bytes | None | Exception],
+        response_queue: Queue[bytes | Exception | None],
         request_input: RequestInput,
         app_future: Future,
         deadline: float | None,
@@ -382,7 +377,7 @@ class ResponseContent(Iterator[bytes]):
         self._deadline = deadline
         self._decompressor = decompressor
 
-    def __iter__(self) -> Iterator[bytes]:
+    def __iter__(self) -> Self:
         return self
 
     def __next__(self) -> bytes:
