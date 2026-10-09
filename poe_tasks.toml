@@ -31,9 +31,9 @@ help = "Run the connect-python conformance tests"
 deps = ["build"]
 sequence = [
   { script = "scripts.setup_it:setup('connect', 'connectrpc/connect-python', '082bba377ba40a7350542574f8d1878bd586ef19')" },
-  { cmd = "uv add ../../..", cwd = "out/integration/connect" },
+  { cmd = "uv pip install ../../..", cwd = "out/integration/connect" },
   # Make sure the pyvoy venv isn't used by specifying uv run.
-  { cmd = "uv run pytest -k test_client_sync", cwd = "out/integration/connect/conformance" },
+  { cmd = "uv run --no-sync pytest -k test_client_sync", cwd = "out/integration/connect/conformance" },
 ]
 
 # The running interpreter's major.minor version, for `lint-types`.
