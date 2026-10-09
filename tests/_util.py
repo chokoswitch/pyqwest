@@ -7,7 +7,7 @@ import subprocess
 import sys
 import threading
 import traceback
-from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
+from collections.abc import AsyncIterator, Awaitable, Callable, Generator, Iterator
 from pathlib import Path
 from queue import Empty, Queue
 from typing import Self
@@ -25,7 +25,7 @@ async def hanging_body() -> AsyncIterator[bytes]:
 
 
 @contextlib.contextmanager
-def raw_server(response: bytes, *, reset: bool = False) -> Iterator[str]:
+def raw_server(response: bytes, *, reset: bool = False) -> Generator[str]:
     """Serves `response` verbatim to a single request, then closes the connection.
 
     Passing `reset` closes with an RST rather than a FIN, which is the
@@ -48,7 +48,7 @@ def raw_server(response: bytes, *, reset: bool = False) -> Iterator[str]:
 
 
 @contextlib.contextmanager
-def one_connection_server(handle: Callable[[socket.socket], None]) -> Iterator[str]:
+def one_connection_server(handle: Callable[[socket.socket], None]) -> Generator[str]:
     """Runs `handle` on the first connection to a local port, then closes it."""
     listener = socket.socket()
     listener.bind(("127.0.0.1", 0))

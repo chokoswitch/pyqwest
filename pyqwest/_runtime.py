@@ -15,7 +15,7 @@ try:
     import sniffio
 except ModuleNotFoundError:
     # trio depends on sniffio, so without it only asyncio can be running.
-    sniffio = None  # ty: ignore[invalid-assignment]
+    sniffio = None
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine

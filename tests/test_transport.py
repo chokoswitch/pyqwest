@@ -26,7 +26,7 @@ from pyqwest import (
 from ._util import SyncRequestBody, run_child
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Iterator
+    from collections.abc import AsyncIterator, Generator, Iterator
 
     from opentelemetry.sdk.metrics._internal.point import Histogram, Metric, Sum
 
@@ -410,7 +410,7 @@ def test_asyncio_without_sniffio(url: str) -> None:
 
 
 @contextlib.contextmanager
-def sniffio_reports(name: str) -> Iterator[None]:
+def sniffio_reports(name: str) -> Generator[None]:
     previous = sniffio.thread_local.name
     sniffio.thread_local.name = name
     try:
