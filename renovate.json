@@ -1,25 +1,5 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["helpers:pinGitHubActionDigests"],
-  "platformCommit": "enabled",
-  "labels": ["dependencies"],
-  "prHourlyLimit": 0,
-  "lockFileMaintenance": {
-    "enabled": true
-  },
-  "packageRules": [
-    {
-      "matchManagers": ["github-actions"],
-      "groupName": "GitHub Actions"
-    },
-    {
-      "matchCategories": ["python"],
-      "groupName": "Python dependencies"
-    },
-    {
-      "matchCategories": ["rust"],
-      "groupName": "Rust dependencies",
-      "rangeStrategy": "bump"
-    }
-  ]
+  "extends": ["github>curioswitch/go-build:renovate-export"],
+  "postUpgradeTasks": {}
 }
