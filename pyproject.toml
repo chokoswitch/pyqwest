@@ -37,6 +37,8 @@ dev = [
   "anyio==4.15.1",
   "asgiref==3.12.1",
   "brotli==1.2.0",
+  # Used in setup_it.py, not directly, keeping it here allows renovate for free.
+  "connectrpc==0.12.1",
   "httpx[http2]==0.28.1",
   "maturin==1.15.0",
   "opentelemetry-test-utils==0.66b1",
