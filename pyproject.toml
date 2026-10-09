@@ -3,7 +3,7 @@ name = "pyqwest"
 version = "0.11.0"
 description = "A modern, high-performance HTTP client for Python and Rust."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license-files = ["LICENSE"]
 classifiers = [
   "Development Status :: 4 - Beta",
@@ -14,11 +14,11 @@ classifiers = [
   "Operating System :: POSIX :: Linux",
   "Programming Language :: Python",
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
+  "Programming Language :: Python :: 3.15",
   "Programming Language :: Python :: Implementation :: CPython",
   "Programming Language :: Rust",
   "Topic :: Internet :: WWW/HTTP",
@@ -33,30 +33,30 @@ Repository = "https://github.com/curioswitch/pyqwest.git"
 
 [dependency-groups]
 dev = [
-  "aiohttp[speedups]",
-  "anyio",
-  "asgiref",
-  "brotli",
-  "httpx[http2]",
-  "maturin",
-  "niquests[http3]",
-  "opentelemetry-test-utils",
-  "outcome",
-  "poethepoet",
-  "psutil",
-  "pytest",
-  "pytest-benchmark",
-  "pytest-cov",
-  "pytest-order",
-  "pyvoy",
-  "ruff",
-  "sniffio",
-  "trio",
-  "trustme",
-  "ty",
-  "uvloop; sys_platform != 'win32'",
-  "winloop; sys_platform == 'win32'",
-  "zstd",
+  "aiohttp[speedups]==3.14.4",
+  "anyio==4.15.1",
+  "asgiref==3.12.1",
+  "brotli==1.2.0",
+  "httpx[http2]==0.28.1",
+  "maturin==1.15.0",
+  "niquests[http3]==3.21.2",
+  "opentelemetry-test-utils==0.66b1",
+  "outcome==1.3.0.post0",
+  "poethepoet==0.48.0",
+  "psutil==7.2.2",
+  "pytest==9.1.1",
+  "pytest-benchmark==5.3.0",
+  "pytest-cov==7.1.0",
+  "pytest-order==1.5.0",
+  "pyvoy==1.3.0",
+  "ruff==0.16.10",
+  "sniffio==1.3.1",
+  "trio==0.34.0",
+  "trustme==1.2.1",
+  "ty==0.0.85",
+  "uvloop==0.23.0; sys_platform != 'win32'",
+  "winloop==0.7.1; sys_platform == 'win32'",
+  "zstd==1.5.7.2",
 ]
 
 docs = ["mkdocstrings-python", "zensical"]
@@ -75,10 +75,10 @@ addopts = [
   "--benchmark-skip",
   "--benchmark-group-by=func,param:http_scheme,param:http_version,param:content_size",
 ]
-testpaths = ["tests"]
 markers = [
   "asyncio_only: the test exercises code that calls asyncio directly, so it runs on no other backend",
 ]
+testpaths = ["tests"]
 
 [tool.ruff.format]
 skip-magic-trailing-comma = true
