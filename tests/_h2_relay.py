@@ -14,7 +14,7 @@ import contextlib
 import socket
 import struct
 import threading
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Self
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -59,7 +59,7 @@ class Relay:
     def url(self) -> str:
         return f"http://127.0.0.1:{self.port}"
 
-    def __enter__(self) -> Relay:
+    def __enter__(self) -> Self:
         self._spawn(self._accept)
         return self
 

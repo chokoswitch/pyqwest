@@ -133,7 +133,7 @@ class SyncRetryTransport(SyncTransport):
                             content=get_content(),
                         )
                     )
-                except Exception as e:  # noqa: PERF203
+                except Exception as e:
                     if not self.should_retry_response(request, e):
                         raise
                     if unbuffered_stream and content_started.is_set():

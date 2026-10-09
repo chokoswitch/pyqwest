@@ -4,7 +4,7 @@ import asyncio
 import contextlib
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Self
 from urllib.parse import unquote, urlparse
 
 from pyqwest import (
@@ -178,7 +178,7 @@ class ASGITransport(Transport):
         async def run_app() -> None:
             try:
                 await self._app(scope, receive, send)
-            except asyncio.TimeoutError as e:
+            except TimeoutError as e:
                 send_queue.put_nowait(TimeoutError(str(e)))
             except Exception as e:
                 self._app_exception = e
@@ -232,7 +232,7 @@ class ASGITransport(Transport):
             trailers=trailers,
         )
 
-    async def __aenter__(self) -> ASGITransport:
+    async def __aenter__(self) -> Self:
         await self.run_lifespan()
         return self
 
@@ -337,7 +337,7 @@ class ResponseContent(AsyncIterator[bytes]):
         self._read_pending = False
         self._closed = False
 
-    def __aiter__(self) -> AsyncIterator[bytes]:
+    def __aiter__(self) -> Self:
         return self
 
     async def __anext__(self) -> bytes:

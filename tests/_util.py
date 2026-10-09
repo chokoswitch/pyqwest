@@ -10,6 +10,7 @@ import traceback
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 from pathlib import Path
 from queue import Empty, Queue
+from typing import Self
 
 import anyio
 import outcome
@@ -99,7 +100,7 @@ class SyncRequestBody(Iterator[bytes]):
         self._closed = False
         self._pending_read = False
 
-    def __iter__(self) -> Iterator[bytes]:
+    def __iter__(self) -> Self:
         return self
 
     def __next__(self) -> bytes:
