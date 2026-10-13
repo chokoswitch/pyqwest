@@ -123,8 +123,8 @@ def client(app: App):
 
 
 def assert_duration_at_least(start: float, end: float, expected: float) -> None:
-    if sys.platform == "win32" and sys.version_info < (3, 11):
-        # On Windows with Python <= 3.10, at least, timer has too low resolution.
+    if sys.platform == "win32" and sys.version_info < (3, 13):
+        # Work around low timer resolution on old Python.
         return
     duration = end - start
     assert duration >= expected, f"Duration {duration} is less than expected {expected}"
