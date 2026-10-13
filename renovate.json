@@ -7,13 +7,17 @@
       "matchManagers": ["pep621"],
       "matchDepTypes": [
         "project.dependencies",
-        "project.optional-dependencies",
-        "project.requires-python"
+        "project.optional-dependencies"
       ],
       "matchFileNames": ["pyproject.toml"],
       // We manage production dependencies ourselves, only bumping
       // when necessary.
       "enabled": false
-    }
+    },
+    {
+      "matchPackageNames": ["python"],
+      "matchFileNames": ["pyproject.toml"],
+      "enabled": false
+    },
   ]
 }
