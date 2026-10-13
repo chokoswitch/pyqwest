@@ -1,5 +1,19 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["github>curioswitch/go-curiostack:renovate-export"],
-  "postUpgradeTasks": {}
+  "postUpgradeTasks": {},
+  "packageRules": [
+    {
+      "matchManagers": ["pep621"],
+      "matchDepTypes": [
+        "project.dependencies",
+        "project.optional-dependencies",
+        "project.requires-python"
+      ],
+      "matchFileNames": ["pyproject.toml"],
+      // We manage production dependencies ourselves, only bumping
+      // when necessary.
+      "enabled": false
+    }
+  ]
 }
